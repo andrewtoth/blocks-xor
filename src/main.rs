@@ -51,13 +51,25 @@ fn main() {
 
         let mut file = fs::File::open(&path).unwrap();
         let mut buf = [0u8; 4];
-        file.read_exact(&mut buf).unwrap();
+        if let Err(e) = file.read_exact(&mut buf) {
+            println!(
+                "Error reading file {}: {e:?}",
+                path.iter().last().unwrap().to_str().unwrap()
+            );
+            return;
+        };
         buf.iter_mut()
             .enumerate()
             .for_each(|(i, b)| *b ^= key[i % key.len()]);
 
         if buf != MAGIC {
-            let mut block = fs::read(&path).unwrap();
+            let Ok(mut block) = fs::read(&path) else {
+                println!(
+                    "Error reading file {}",
+                    path.iter().last().unwrap().to_str().unwrap()
+                );
+                return;
+            };
             block
                 .iter_mut()
                 .enumerate()
