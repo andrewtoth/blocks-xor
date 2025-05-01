@@ -2,8 +2,10 @@
 
 Bitcoin Core v28 and later versions have the ability to obfuscate the blocks directory while it is stored on disk.
 However, this only takes effect if the blocks directory is fresh, i.e. you will have to resync the node from scratch.
-This simple program will create a random obfuscation key and XOR all block files. It currently only works for mainnet,
-and only if your blocks are stored in the default data directory.
+
+This program will obfuscate the blocks directory without having to redownload the blocks. It creates a random
+obfuscation key and XORs all block files. It currently only works for mainnet, and only if your blocks are stored in the
+default data directory.
 
 ## Running
 
