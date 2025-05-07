@@ -54,7 +54,7 @@ fn main() {
             return;
         };
 
-        if buf != MAGIC {
+        if buf == MAGIC {
             let Ok(mut block) = fs::read(&path) else {
                 println!(
                     "Error reading file {}",
