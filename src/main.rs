@@ -33,7 +33,22 @@ fn main() {
     println!("Xor'ing blocks dir. Do not start bitcoind until finished!");
 
     let key: [u8; 8] = fs::read(&xor_path).unwrap().try_into().unwrap();
-    let key = if key == [0u8; 8] { rand::random() } else { key };
+    if key[0..4] == [0u8; 4] && key[4..] != [0u8; 4] {
+        println!("This script doesn't work with a non-zero key with 4 bytes of leading zeros");
+    }
+    let key = if key == [0u8; 8] {
+        loop {
+            let key: [u8; 8] = rand::random();
+            // Don't use keys with 4 bytes of leading zeros
+            // They won't let us detect the first 4 bytes of magic in the files
+            if key[0..4] == [0u8; 4] {
+                continue;
+            }
+            break key;
+        }
+    } else {
+        key
+    };
 
     fs::write(xor_path, key).unwrap();
 
