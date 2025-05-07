@@ -1,4 +1,3 @@
-use rayon::prelude::*;
 use std::{
     env, fs,
     io::{self, Read},
@@ -39,11 +38,7 @@ fn main() {
     let total = paths.len();
     let done = AtomicUsize::new(0);
 
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(4)
-        .build_global()
-        .unwrap();
-    paths.into_par_iter().for_each(|path| {
+    paths.into_iter().for_each(|path| {
         if !path.extension().is_some_and(|f| f == "dat") || path.iter().last().unwrap() == "xor.dat"
         {
             return;
@@ -58,9 +53,6 @@ fn main() {
             );
             return;
         };
-        buf.iter_mut()
-            .enumerate()
-            .for_each(|(i, b)| *b ^= key[i % key.len()]);
 
         if buf != MAGIC {
             let Ok(mut block) = fs::read(&path) else {
@@ -75,7 +67,10 @@ fn main() {
                 .enumerate()
                 .for_each(|(i, b)| *b ^= key[i % key.len()]);
 
-            fs::write(&path, block).unwrap();
+            let mut tmp_path = path.as_os_str().to_owned();
+            tmp_path.push(".tmp");
+            fs::write(&tmp_path, block).unwrap();
+            fs::rename(&tmp_path, &path).unwrap();
         }
 
         let done = done.fetch_add(1, Ordering::Relaxed);
