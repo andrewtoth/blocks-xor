@@ -1,12 +1,14 @@
 use std::{
     env, fs,
     io::{self, Read},
-    sync::atomic::{AtomicUsize, Ordering},
+    time::{Duration, Instant},
 };
 
 const MAGIC: [u8; 4] = [0xf9, 0xbe, 0xb4, 0xd9];
 
 fn main() {
+    let start = Instant::now();
+
     let datadir = match env::consts::OS {
         "macos" => "Library/Application Support/Bitcoin",
         "windows" => "AppData\\Local\\Bitcoin",
@@ -36,7 +38,9 @@ fn main() {
     fs::write(xor_path, key).unwrap();
 
     let total = paths.len();
-    let done = AtomicUsize::new(0);
+    let mut done = 0;
+    let mut timer = Instant::now();
+    let duration = Duration::from_secs(5);
 
     paths.into_iter().for_each(|path| {
         if !path.extension().is_some_and(|f| f == "dat") || path.iter().last().unwrap() == "xor.dat"
@@ -73,11 +77,15 @@ fn main() {
             fs::rename(&tmp_path, &path).unwrap();
         }
 
-        let done = done.fetch_add(1, Ordering::Relaxed);
-        if done % 100 == 0 {
+        done += 1;
+        if timer.elapsed() > duration {
             println!("Xor'd {done} / {total} files");
+            timer = Instant::now();
         }
     });
 
-    println!("Done! Blocksdir is now xor'd.");
+    println!(
+        "Done in {} seconds! Blocksdir is now xor'd.",
+        start.elapsed().as_secs()
+    );
 }
