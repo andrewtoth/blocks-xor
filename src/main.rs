@@ -11,11 +11,7 @@ fn main() -> Result<(), io::Error> {
     let start = Instant::now();
 
     let blocks_path = if env::args().len() > 1 {
-        env::args()
-            .skip(1)
-            .next()
-            .expect("the second arg to exist")
-            .into()
+        env::args().nth(1).expect("the arg to exist").into()
     } else {
         #[allow(deprecated)]
         env::home_dir()
@@ -76,7 +72,9 @@ fn main() -> Result<(), io::Error> {
         if let Err(e) = xor_block(&path, key) {
             println!(
                 "Error xor-ing file {:?}: {e:?}",
-                path.iter().last().expect("path to have a last component")
+                path.iter()
+                    .next_back()
+                    .expect("path to have a last component")
             )
         };
 
@@ -96,20 +94,20 @@ fn main() -> Result<(), io::Error> {
 }
 
 fn xor_block(path: &Path, key: [u8; 8]) -> Result<(), io::Error> {
-    if !path.extension().is_some_and(|f| f == "dat") {
+    if path.extension().is_none_or(|f| f != "dat") {
         return Ok(());
     }
 
     let file_name = path
         .iter()
-        .last()
+        .next_back()
         .expect("there to be a last path component");
 
     if file_name == "xor.dat" {
         return Ok(());
     }
 
-    let mut file = fs::File::open(&path)?;
+    let mut file = fs::File::open(path)?;
     let mut buf = [0u8; 4];
     file.read_exact(&mut buf)?;
 
@@ -117,7 +115,7 @@ fn xor_block(path: &Path, key: [u8; 8]) -> Result<(), io::Error> {
         return Ok(());
     }
 
-    let mut block = fs::read(&path)?;
+    let mut block = fs::read(path)?;
     block
         .iter_mut()
         .enumerate()
@@ -126,7 +124,7 @@ fn xor_block(path: &Path, key: [u8; 8]) -> Result<(), io::Error> {
     let mut tmp_path = path.as_os_str().to_owned();
     tmp_path.push(".tmp");
     fs::write(&tmp_path, block)?;
-    fs::rename(&tmp_path, &path)?;
+    fs::rename(&tmp_path, path)?;
 
     Ok(())
 }
