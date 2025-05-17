@@ -9,8 +9,8 @@ obfuscation key and XORs all block files. It only works for mainnet.
 ## Running
 
 Shut down bitcoind and run `cargo run --release`. This looks for blocks in the default location.
-If the blocks directory is in a different location, pass the location as the next argument:
-`cargo run --release ~/.bitcoin/blocks`.
+If the data or blocks directory is in a different location, pass the location as the next argument:
+`cargo run --release -- -datadir=/home/user/.bitcoin`.
 
 This can take some time, so please be patient.
 
