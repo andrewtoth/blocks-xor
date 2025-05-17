@@ -73,11 +73,10 @@ fn main() -> Result<(), Error> {
         .collect::<Result<Vec<_>, io::Error>>()?;
 
     let key_path: std::path::PathBuf = blocks_path.join(XOR_FILE_NAME);
-    let Ok::<[u8; 8], _>(key) = fs::read(&key_path)?.try_into() else {
-        return Err(
-            "No xor.dat file. Make sure you are running Bitcoin Core v28 or higher.".into(),
-        );
-    };
+    let key: [u8; 8] = fs::read(&key_path)
+        .map_err(|_| "No xor.dat file. Make sure you are running Bitcoin Core v28 or higher.")?
+        .try_into()
+        .map_err(|_| "No xor.dat file. Make sure you are running Bitcoin Core v28 or higher.")?;
 
     if key[..4] == [0u8; 4] && key[4..] != [0u8; 4] {
         return Err(
@@ -171,17 +170,15 @@ fn xor_file(path: &Path, key: [u8; 8]) -> Result<(), io::Error> {
             *chunk ^= *key_u128;
             writer.write_all(&*(chunk as *const [u8; 16]))?;
         }
-        if reader.read_exact(&mut buf).is_err() {
+        let n = reader.read(&mut buf)?;
+        if n < 16 {
+            for i in 0..n {
+                buf[i] ^= double_key[i];
+            }
+            writer.write(&buf[..n])?;
             break;
         }
     }
-
-    let mut buf = vec![0u8; 15];
-    reader.read_to_end(&mut buf)?;
-    for i in 0..buf.len() {
-        buf[i] ^= key[i % key.len()];
-    }
-    writer.write_all(&buf)?;
 
     writer.flush()?;
     fs::rename(&tmp_path, path)?;
