@@ -169,11 +169,11 @@ fn xor_file(path: &Path, key: [u8; 16]) -> Result<(), io::Error> {
     let key_u128 = unsafe { *(&key as *const _ as *const u128) };
 
     loop {
-        let chunk = &mut buf as *mut _ as *mut u128;
+        let buf_u128 = &mut buf as *mut _ as *mut u128;
         unsafe {
-            *chunk ^= key_u128;
-            writer.write_all(&*(chunk as *const [u8; 16]))?;
+            *buf_u128 ^= key_u128;
         }
+        writer.write_all(&buf)?;
         let n = reader.read(&mut buf)?;
         if n < 16 {
             for i in 0..n {
