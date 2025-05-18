@@ -147,12 +147,13 @@ fn main() -> Result<(), Error> {
 }
 
 fn xor_file(path: &Path, key: u128) -> Result<(), io::Error> {
-    let mut buf = [0u8; 16];
+    let mut buf_u128 = 0u128;
+    let buf = unsafe { (&mut buf_u128 as *mut _ as *mut [u8; 16]).as_mut() }.unwrap();
 
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
 
-    reader.read_exact(&mut buf)?;
+    reader.read_exact(buf)?;
 
     if buf[..4] != MAGIC {
         // This file is already obfuscated
@@ -169,18 +170,15 @@ fn xor_file(path: &Path, key: u128) -> Result<(), io::Error> {
     let mut writer = BufWriter::new(file);
 
     loop {
-        let buf_u128 = buf.as_mut_ptr() as *mut u128;
-        unsafe {
-            *buf_u128 ^= key;
-        }
-        writer.write_all(&buf)?;
-        let n = reader.read(&mut buf)?;
+        buf_u128 ^= key;
+        writer.write_all(buf)?;
+        let n = reader.read(buf)?;
         if n < 16 {
             let key = key.to_ne_bytes();
             for i in 0..n {
                 buf[i] ^= key[i];
             }
-            writer.write(&buf[..n])?;
+            writer.write_all(&buf[..n])?;
             break;
         }
     }
