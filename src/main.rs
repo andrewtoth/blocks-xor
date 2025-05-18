@@ -160,8 +160,7 @@ fn xor_file(path: &Path, key: u128) -> Result<(), io::Error> {
         return Ok(());
     }
 
-    let mut tmp_path = path.as_os_str().to_owned();
-    tmp_path.push(".tmp");
+    let tmp_path = path.with_extension("dat.tmp");
     let file = File::options()
         .write(true)
         .create(true)
