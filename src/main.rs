@@ -115,6 +115,7 @@ fn main() -> Result<(), Error> {
     let mut double_key = [0u8; 16];
     double_key[..8].copy_from_slice(&key);
     double_key[8..].copy_from_slice(&key);
+    let key = u128::from_ne_bytes(double_key);
 
     paths.into_iter().for_each(|path| {
         if path.extension().is_none_or(|f| f != "dat") {
@@ -125,7 +126,7 @@ fn main() -> Result<(), Error> {
             return;
         }
 
-        if let Err(e) = xor_file(&path, double_key) {
+        if let Err(e) = xor_file(&path, key) {
             println!("Error obfuscating file {}: {e}", path.display())
         };
 
@@ -145,11 +146,12 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn xor_file(path: &Path, key: [u8; 16]) -> Result<(), io::Error> {
+fn xor_file(path: &Path, key: u128) -> Result<(), io::Error> {
+    let mut buf = [0u8; 16];
+
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
 
-    let mut buf = [0u8; 16];
     reader.read_exact(&mut buf)?;
 
     if buf[..4] != MAGIC {
@@ -166,18 +168,17 @@ fn xor_file(path: &Path, key: [u8; 16]) -> Result<(), io::Error> {
         .open(&tmp_path)?;
     let mut writer = BufWriter::new(file);
 
-    let key_u128 = unsafe { *(&key as *const _ as *const u128) };
-
     loop {
-        let buf_u128 = &mut buf as *mut _ as *mut u128;
+        let buf_u128 = buf.as_mut_ptr() as *mut u128;
         unsafe {
-            *buf_u128 ^= key_u128;
+            *buf_u128 ^= key;
         }
         writer.write_all(&buf)?;
         let n = reader.read(&mut buf)?;
         if n < 16 {
+            let key_bytes = key.to_ne_bytes();
             for i in 0..n {
-                buf[i] ^= key[i];
+                buf[i] ^= key_bytes[i];
             }
             writer.write(&buf[..n])?;
             break;
