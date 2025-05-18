@@ -1,6 +1,6 @@
 use std::{
     env,
-    fmt::{Debug, Display},
+    fmt::{self, Debug, Display, Formatter},
     fs::{self, File},
     hash::{BuildHasher, Hasher, RandomState},
     io::{self, BufReader, BufWriter, Read, Write},
@@ -12,29 +12,31 @@ const MAGIC: [u8; 4] = [0xf9, 0xbe, 0xb4, 0xd9];
 const XOR_FILE_NAME: &str = "xor.dat";
 
 #[derive(Debug)]
-enum Error {
-    Io(io::Error),
-    Custom(String),
+struct Error {
+    msg: String,
+}
+
+impl Error {
+    fn new(msg: String) -> Self {
+        Self { msg }
+    }
 }
 
 impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::Io(e) => write!(f, "{e}"),
-            Error::Custom(e) => write!(f, "{e}"),
-        }
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.msg)
     }
 }
 
 impl From<io::Error> for Error {
     fn from(value: io::Error) -> Self {
-        Error::Io(value)
+        Error::new(value.to_string())
     }
 }
 
 impl From<&str> for Error {
     fn from(value: &str) -> Self {
-        Error::Custom(value.to_string())
+        Error::new(value.to_string())
     }
 }
 
@@ -44,7 +46,7 @@ fn main() -> Result<(), Error> {
     let data_dir_path = if env::args().len() == 2 {
         let arg = env::args().nth(1).expect("the arg to exist");
         if !arg.starts_with("--datadir=") && !arg.starts_with("-datadir=") {
-            return Err(Error::Custom(format!(
+            return Err(Error::new(format!(
                 "Error parsing command line arguments: Invalid parameter {arg}"
             )));
         }
@@ -72,11 +74,11 @@ fn main() -> Result<(), Error> {
         .map(|res| res.map(|e| e.path()))
         .collect::<Result<Vec<_>, io::Error>>()?;
 
-    let key_path: std::path::PathBuf = blocks_path.join(XOR_FILE_NAME);
+    let key_path = blocks_path.join(XOR_FILE_NAME);
     let key: [u8; 8] = fs::read(&key_path)
         .map_err(|_| "No xor.dat file. Make sure you are running Bitcoin Core v28 or higher.")?
         .try_into()
-        .map_err(|_| "No xor.dat file. Make sure you are running Bitcoin Core v28 or higher.")?;
+        .map_err(|_| "Invalid xor.dat file.")?;
 
     if key[..4] == [0u8; 4] && key[4..] != [0u8; 4] {
         return Err(
@@ -110,14 +112,27 @@ fn main() -> Result<(), Error> {
     let mut timer = Instant::now();
     let duration = Duration::from_secs(5);
 
+    let mut double_key = [0u8; 16];
+    double_key[..8].copy_from_slice(&key);
+    double_key[8..].copy_from_slice(&key);
+
     paths.into_iter().for_each(|path| {
-        if let Err(e) = xor_file(&path, key) {
+        if path.extension().is_none_or(|f| f != "dat") {
+            return;
+        }
+
+        if path.file_name().expect("there to be a file name") == XOR_FILE_NAME {
+            return;
+        }
+
+        if let Err(e) = xor_file(&path, double_key) {
             println!("Error obfuscating file {}: {e}", path.display())
         };
 
         done += 1;
         if timer.elapsed() > duration {
-            println!("Obfuscated {done} / {total} files");
+            let rate = done / start.elapsed().as_secs();
+            println!("Obfuscated {done} / {total} files ({rate}/sec)");
             timer = Instant::now();
         }
     });
@@ -130,17 +145,9 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn xor_file(path: &Path, key: [u8; 8]) -> Result<(), io::Error> {
-    if path.extension().is_none_or(|f| f != "dat") {
-        return Ok(());
-    }
-
-    if path.file_name().expect("there to be a file name") == XOR_FILE_NAME {
-        return Ok(());
-    }
-
-    let in_file = File::open(path)?;
-    let mut reader = BufReader::new(in_file);
+fn xor_file(path: &Path, key: [u8; 16]) -> Result<(), io::Error> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
 
     let mut buf = [0u8; 16];
     reader.read_exact(&mut buf)?;
@@ -152,35 +159,32 @@ fn xor_file(path: &Path, key: [u8; 8]) -> Result<(), io::Error> {
 
     let mut tmp_path = path.as_os_str().to_owned();
     tmp_path.push(".tmp");
-    let out_file = File::options()
+    let file = File::options()
         .write(true)
         .create(true)
         .truncate(true)
         .open(&tmp_path)?;
-    let mut writer = BufWriter::new(out_file);
+    let mut writer = BufWriter::new(file);
 
-    let mut double_key = [0u8; 16];
-    double_key[..8].copy_from_slice(&key);
-    double_key[8..].copy_from_slice(&key);
-    let key_u128 = &double_key as *const _ as *const u128;
+    let key_u128 = unsafe { *(&key as *const _ as *const u128) };
 
     loop {
         let chunk = &mut buf as *mut _ as *mut u128;
         unsafe {
-            *chunk ^= *key_u128;
+            *chunk ^= key_u128;
             writer.write_all(&*(chunk as *const [u8; 16]))?;
         }
         let n = reader.read(&mut buf)?;
         if n < 16 {
             for i in 0..n {
-                buf[i] ^= double_key[i];
+                buf[i] ^= key[i];
             }
             writer.write(&buf[..n])?;
             break;
         }
     }
 
-    writer.flush()?;
+    writer.into_inner()?.sync_data()?;
     fs::rename(&tmp_path, path)?;
 
     Ok(())
