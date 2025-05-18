@@ -176,9 +176,9 @@ fn xor_file(path: &Path, key: u128) -> Result<(), io::Error> {
         writer.write_all(&buf)?;
         let n = reader.read(&mut buf)?;
         if n < 16 {
-            let key_bytes = key.to_ne_bytes();
+            let key = key.to_ne_bytes();
             for i in 0..n {
-                buf[i] ^= key_bytes[i];
+                buf[i] ^= key[i];
             }
             writer.write(&buf[..n])?;
             break;
