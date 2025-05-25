@@ -58,7 +58,7 @@ fn main() -> Result<(), Error> {
             .expect("to have a home directory")
             .join(match env::consts::OS {
                 "macos" => "Library/Application Support/Bitcoin",
-                "windows" => "AppData\\Local\\Bitcoin",
+                "windows" => "AppData\\Roaming\\Bitcoin",
                 "linux" => ".bitcoin",
                 _ => {
                     return Err("Unknown OS".into());
